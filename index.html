@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rule Engine</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+        }
+        .container {
+            width: 48%;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        textarea {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        input[type="submit"] {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            height: 200px;
+            overflow-y: auto;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Rule Engine</h1>
+
+        <!-- Form to add a single rule -->
+        <h2>Add Rule</h2>
+        <form id="add-rule-form">
+            <label for="rule">Rule:</label><br>
+            <textarea id="rule" name="rule" rows="4" placeholder="Enter your rule here"></textarea><br>
+            <input type="submit" value="Add Rule">
+        </form>
+
+        <!-- Form to evaluate a single rule -->
+        <h2>Evaluate Rule</h2>
+        <form id="evaluate-rule-form">
+            <label for="rule-to-evaluate">Rule:</label><br>
+            <textarea id="rule-to-evaluate" name="rule" rows="4" placeholder="Enter rule or select from the list below"></textarea><br>
+
+            <select id="rule-name-evaluate">
+                <option value="">Select a rule from the database</option>
+            </select><br><br>
+
+            <label for="data">Data (JSON format):</label><br>
+            <textarea id="data" name="data" rows="4" placeholder='Enter data here in JSON format, e.g., {"age": 25, "department": "Sales"}'></textarea><br>
+            <input type="submit" value="Evaluate Rule">
+        </form>
+    </div>
+
+    <div class="container">
+        <!-- Form to combine multiple rules -->
+        <h2>Combine Rules</h2>
+        <form id="combine-rules-form">
+            <label for="rules">Rules (Enter multiple rules separated by new lines):</label><br>
+            <textarea id="rules" name="rules" rows="4" placeholder="Enter rules here"></textarea><br>
+
+            <select id="rule-names-combine" multiple>
+                <option value="">Select rules from the database</option>
+            </select><br><br>
+
+            <input type="submit" value="Combine Rules">
+        </form>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // Fetch rule names from the server and populate the dropdowns
+        fetch('/get_rule_names')
+            .then(response => response.json())
+            .then(data => {
+                const evaluateDropdown = document.getElementById('rule-name-evaluate');
+                const combineDropdown = document.getElementById('rule-names-combine');
+
+                data.forEach(ruleName => {
+                    const option = document.createElement('option');
+                    option.value = ruleName;
+                    option.textContent = ruleName;
+                    evaluateDropdown.appendChild(option);
+
+                    const optionClone = option.cloneNode(true);
+                    combineDropdown.appendChild(optionClone);
+                });
+            });
+
+        // Handle adding a rule
+        document.getElementById('add-rule-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const rule = document.getElementById('rule').value;
+
+            fetch('/add_rule', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ rule: rule }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayResult(data);
+                document.getElementById('add-rule-form').reset();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                displayResult({ error: 'An error occurred while adding the rule.' });
+            });
+        });
+
+        // Handle evaluating a rule
+        document.getElementById('evaluate-rule-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const rule = document.getElementById('rule-to-evaluate').value;
+            const ruleName = document.getElementById('rule-name-evaluate').value;
+            const data = document.getElementById('data').value;
+
+            try {
+                const jsonData = JSON.parse(data);
+                fetch('/evaluate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ rule: rule, rule_name: ruleName, data: jsonData }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    displayResult(data);
+                    document.getElementById('evaluate-rule-form').reset();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    displayResult({ error: 'An error occurred while evaluating the rule.' });
+                });
+            } catch (e) {
+                displayResult({ error: 'Invalid JSON data. Please correct and try again.' });
+            }
+        });
+
+        // Fetch the rule string when a rule is selected from the dropdown
+        document.getElementById('rule-name-evaluate').addEventListener('change', function() {
+            const selectedRuleName = this.value;
+            if (selectedRuleName) {
+                fetch(`/get_rule_string?name=${encodeURIComponent(selectedRuleName)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('rule-to-evaluate').value = data.rule_string;
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            } else {
+                document.getElementById('rule-to-evaluate').value = '';
+            }
+        });
+
+        // Handle combining multiple rules
+        document.getElementById('combine-rules-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const rules = document.getElementById('rules').value.trim().split('\n');
+            const selectedRuleNames = Array.from(document.getElementById('rule-names-combine').selectedOptions).map(option => option.value);
+
+            fetch('/combine_rules', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ rules: rules, rule_names: selectedRuleNames }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayResult(data);
+                document.getElementById('combine-rules-form').reset();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                displayResult({ error: 'An error occurred while combining the rules.' });
+            });
+        });
+
+        // Function to display results
+        function displayResult(result) {
+            const resultDiv = document.getElementById('results');
+            resultDiv.innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+        }
+    </script>
+</body>
+</html>
