@@ -21,7 +21,7 @@ A simple Flask-based rule engine application(Simple UI, API and Backend, Data) t
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/Bhanuu01/flask-rule-engine.git
+   git clone https://github.com/utkarshsinghlpu/Rule-Engine-with-AST
    cd flask-rule-engine
 
 2. **Install the required packages:**
